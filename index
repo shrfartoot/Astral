@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>استودیو موشن سه‌بعدی دایره البروج | Zodiac 3D Motion Studio</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Three.js (r128) برای رندرینگ رئالیستیک سه‌بعدی -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- فونت فارسی Vazirmatn و فونت انگلیسی Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-studio: #05070d;
+      --panel-bg: #0c111d;
+      --card-bg: #121827;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --accent-blue: #3F8FFE;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-studio);
+      color: #e6edf7;
+      font-family: 'Vazirmatn', 'Inter', sans-serif;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      width: 100%;
+      height: 100vh;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .font-mono-num {
+      font-family: 'Inter', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* اسکرول‌بار ظریف برای پنل کنترل */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* فرم مجزای 9:16 بدون هیچ ورودی در داخل آن */
+    #stage-pane {
+      container-type: size;
+    }
+
+    #stage-9-16 {
+      position: relative;
+      height: calc(100vh - 16px);
+      width: auto;
+      height: min(100cqh, calc(100cqw * 16 / 9));
+      width: min(100cqw, calc(100cqh * 9 / 16));
+      aspect-ratio: 9 / 16;
+      border-radius: 18px;
+      overflow: hidden;
+      background-color: #060911;
+      background-size: cover;
+      background-position: center;
+      box-shadow:
+        0 25px 60px rgba(0, 0, 0, 0.75),
+        0 0 0 1px rgba(255, 255, 255, 0.12);
+      flex-shrink: 0;
+    }
+
+    #stage-canvas-wrapper {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #stage-canvas-wrapper canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* اسلایدر سفارشی */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      height: 5px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #3F8FFE;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(63, 143, 254, 0.65);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    /* کنترلر کره‌ای سه‌بعدی (Trackball Gizmo) برای چرخش آزاد زاویه دوربین */
+    #camera-gizmo {
+      position: relative;
+      width: 136px;
+      height: 136px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 30%, rgba(63, 143, 254, 0.28), rgba(10, 16, 30, 0.95) 70%);
+      border: 1px solid rgba(63, 143, 254, 0.45);
+      box-shadow:
+        inset 0 0 24px rgba(63, 143, 254, 0.2),
+        0 8px 24px rgba(0, 0, 0, 0.5);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    #camera-gizmo:active {
+      cursor: grabbing;
+      border-color: rgba(91, 216, 80, 0.75);
+    }
+
+    /* خطوط شبکه داخل نشانگر سه‌بعدی */
+    .gizmo-ring-h {
+      position: absolute;
+      top: 50%;
+      left: 8%;
+      right: 8%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.14);
+      pointer-events: none;
+    }
+    .gizmo-ring-v {
+      position: absolute;
+      left: 50%;
+      top: 8%;
+      bottom: 8%;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.14);
+      pointer-events: none;
+    }
+    .gizmo-ellipse {
+      position: absolute;
+      inset: 18%;
+      border-radius: 50%;
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+      pointer-events: none;
+    }
+
+    #gizmo-knob {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ffffff, #3F8FFE 65%);
+      box-shadow: 0 0 14px rgba(63, 143, 254, 0.95);
+      transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+      pointer-events: none;
+      transition: box-shadow 0.15s ease;
+    }
+
+    /* پیام غیرمزاحم (جایگزین alert) */
+    #toast-box {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 100;
+      transform: translateY(120%);
+      opacity: 0;
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+    #toast-box.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="h-screen w-full flex flex-row overflow-x-auto overflow-y-hidden">
+
+  <!-- ====================================================================== -->
+  <!-- بخش سمت چپ: استیج مجزای 9:16 (هیچ ورودی یا دکمه‌ای داخل فرم نیست)    -->
+  <!-- ====================================================================== -->
+  <main id="stage-pane" class="flex-1 min-w-[320px] h-screen flex items-center justify-center p-2 bg-[#05070d] overflow-hidden">
+    <div id="stage-9-16" aria-label="Zodiac 9:16 Motion Stage">
+      <div id="stage-canvas-wrapper"></div>
+    </div>
+  </main>
+
+  <!-- ====================================================================== -->
+  <!-- بخش سمت راست: پنل کنترل و ورودی‌ها (دقیقاً سمت راست فرم 9:16)          -->
+  <!-- ====================================================================== -->
+  <aside dir="rtl" class="w-[360px] lg:w-[410px] xl:w-[430px] min-w-[340px] h-screen bg-[#0c111d] border-l border-white/10 flex flex-col shrink-0">
+
+    <!-- هدر پنل -->
+    <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-[#0f1524]">
+      <div>
+        <h1 class="text-base font-bold text-white tracking-tight">کنترل پنل موشن دایره البروج</h1>
+        <p class="text-[11px] text-slate-400 mt-0.5">فرم ۹:۱۶ مجزا • رندر سه‌بعدی رئالیستیک</p>
+      </div>
+      <button id="btn-reset-all" type="button" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 transition">
+        حالت پیش‌فرض عکس
+      </button>
+    </div>
+
+    <!-- بدنه اسکرول‌دار ورودی‌ها -->
+    <div class="flex-1 overflow-y-auto custom-scroll p-4 space-y-4">
+
+      <!-- کارت ۱: موقعیت محور و سیاره (ماه) -->
+      <section class="bg-[#121827] border border-white/10 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#5BD850] shadow-[0_0_8px_#5BD850]"></span>
+            موقعیت محور و سیاره (روی دایره نقطه‌چین)
+          </h2>
+          <span id="planet-total-deg-badge" class="font-mono-num text-xs px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/10">56.0°</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="planet-sign" class="block text-xs text-slate-400 mb-1">انتخاب نشان</label>
+            <select id="planet-sign" class="w-full bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#3F8FFE]"></select>
+          </div>
+          <div>
+            <label for="planet-deg" class="block text-xs text-slate-400 mb-1">درجه داخل نشان (۰ تا ۳۰)</label>
+            <input id="planet-deg" type="number" min="0" max="30" step="0.5" value="26" class="font-mono-num w-full bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#3F8FFE]" />
+          </div>
+        </div>
+
+        <input id="planet-deg-slider" type="range" min="0" max="30" step="0.5" value="26" class="w-full" />
+
+        <div class="pt-1 space-y-1.5">
+          <span class="block text-[11px] text-slate-400">حالت حرکت سیاره و محور:</span>
+          <div class="grid grid-cols-2 gap-1 bg-[#090d17] p-1 rounded-lg border border-white/10 text-[11px]">
+            <button type="button" data-move-mode="axis" class="move-mode-btn py-1.5 px-2 rounded-md bg-[#3F8FFE] text-white font-medium transition">حرکت محور (خط نقطه‌چین)</button>
+            <button type="button" data-move-mode="free" class="move-mode-btn py-1.5 px-2 rounded-md text-slate-400 hover:text-white transition">حرکت آزاد سیاره</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-[11px] text-slate-400">جهت چرخش محور:</span>
+          <div class="flex bg-[#090d17] p-0.5 rounded-lg border border-white/10 text-[11px]">
+            <button type="button" data-dir="shortest" class="dir-btn px-2.5 py-1 rounded-md bg-[#3F8FFE] text-white font-medium transition">کوتاه‌ترین</button>
+            <button type="button" data-dir="ccw" class="dir-btn px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition">پادساعتگرد</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- کارت ۲: موقعیت خورشید -->
+      <section class="bg-[#121827] border border-white/10 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#E5C94E] shadow-[0_0_8px_#E5C94E]"></span>
+            موقعیت خورشید (چسبیده به خط داخلی دایره)
+          </h2>
+          <span id="sun-total-deg-badge" class="font-mono-num text-xs px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/10">69.0°</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="sun-sign" class="block text-xs text-slate-400 mb-1">انتخاب نشان خورشید</label>
+            <select id="sun-sign" class="w-full bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#E5C94E]"></select>
+          </div>
+          <div>
+            <label for="sun-deg" class="block text-xs text-slate-400 mb-1">درجه داخل نشان (۰ تا ۳۰)</label>
+            <input id="sun-deg" type="number" min="0" max="30" step="0.5" value="9" class="font-mono-num w-full bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#E5C94E]" />
+          </div>
+        </div>
+
+        <input id="sun-deg-slider" type="range" min="0" max="30" step="0.5" value="9" class="w-full" />
+      </section>
+
+      <!-- کارت ۳: دیوریشن و دکمه اجرای موشن -->
+      <section class="bg-[#121827] border border-white/10 rounded-xl p-4 space-y-3">
+        <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#3F8FFE] shadow-[0_0_8px_#3F8FFE]"></span>
+          دیوریشن و اجرای انیمیشن
+        </h2>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="motion-duration" class="block text-xs text-slate-400 mb-1">دیوریشن موشن (ثانیه)</label>
+            <input id="motion-duration" type="number" min="0.2" max="30" step="0.5" value="4" class="font-mono-num w-full bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#3F8FFE]" />
+          </div>
+          <div>
+            <label for="camera-duration" class="block text-xs text-slate-400 mb-1">دیوریشن دوربین (ثانیه)</label>
+            <input id="camera-duration" type="number" min="0.2" max="30" step="0.5" value="4" class="font-mono-num w-full bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#3F8FFE]" />
+          </div>
+        </div>
+
+        <button id="btn-run-motion" type="button" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-l from-[#3F8FFE] to-[#2563eb] hover:from-[#539cff] hover:to-[#3b82f6] text-white font-semibold text-sm shadow-lg shadow-blue-500/25 transition active:scale-[0.98]">
+          اعمال دیتا و اجرای موشن
+        </button>
+      </section>
+
+      <!-- کارت ۴: دوربین سه‌بعدی رئالیستیک و زوم -->
+      <section class="bg-[#121827] border border-white/10 rounded-xl p-4 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#FF4230] shadow-[0_0_8px_#FF4230]"></span>
+            زاویه دوربین سه‌بعدی و زوم
+          </h2>
+          <button id="btn-reset-camera" type="button" class="text-[11px] text-[#3F8FFE] hover:text-blue-300 transition">
+            نمای روبرو (ریست)
+          </button>
+        </div>
+
+        <!-- انتخاب حالت دوربین سه‌بعدی -->
+        <div class="grid grid-cols-3 gap-1.5 bg-[#090d17] p-1 rounded-xl border border-white/10">
+          <button type="button" data-cam-mode="free" class="cam-mode-btn py-2 px-1.5 rounded-lg text-[11px] font-medium bg-[#3F8FFE] text-white transition">
+            زاویه آزاد ۳D
+          </button>
+          <button type="button" data-cam-mode="planet" class="cam-mode-btn py-2 px-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:text-white transition">
+            روبروی سیاره
+          </button>
+          <button type="button" data-cam-mode="axis" class="cam-mode-btn py-2 px-1.5 rounded-lg text-[11px] font-medium text-slate-400 hover:text-white transition">
+            همراه با محور
+          </button>
+        </div>
+
+        <!-- نشانگر کره‌ای سه‌بعدی برای چرخاندن دوربین به هر سمت -->
+        <div class="flex items-center gap-4 bg-[#090d17]/70 p-3 rounded-xl border border-white/5">
+          <div id="camera-gizmo" title="بکشید تا دوربین سه‌بعدی بچرخد">
+            <div class="gizmo-ring-h"></div>
+            <div class="gizmo-ring-v"></div>
+            <div class="gizmo-ellipse"></div>
+            <div id="gizmo-knob"></div>
+          </div>
+
+          <div class="flex-1 space-y-2.5">
+            <div>
+              <div class="flex justify-between text-[11px] mb-1">
+                <span class="text-slate-400">زاویه افقی (Yaw)</span>
+                <span id="yaw-val" class="font-mono-num text-white">0°</span>
+              </div>
+              <input id="cam-yaw" type="range" min="-180" max="180" step="1" value="0" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-1">
+                <span class="text-slate-400">زاویه عمودی (Pitch)</span>
+                <span id="pitch-val" class="font-mono-num text-white">0°</span>
+              </div>
+              <input id="cam-pitch" type="range" min="-72" max="72" step="1" value="0" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-1">
+                <span class="text-slate-400">میزان زوم (Zoom)</span>
+                <span id="zoom-val" class="font-mono-num text-white">1.00x</span>
+              </div>
+              <input id="cam-zoom" type="range" min="0.5" max="3.8" step="0.05" value="1" class="w-full" />
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-apply-camera" type="button" class="w-full py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-medium text-white transition">
+          حرکت نرم دوربین با دیوریشن تعیین‌شده
+        </button>
+      </section>
+
+      <!-- کارت ۵: تغییر تصاویر با URL و تغییر پس‌زمینه -->
+      <section class="bg-[#121827] border border-white/10 rounded-xl p-4 space-y-3.5">
+        <h2 class="text-sm font-semibold text-white">شخصی‌سازی تصاویر (URL) و پس‌زمینه</h2>
+
+        <!-- تصویر سیاره روی محور -->
+        <div>
+          <label for="planet-url" class="block text-xs text-slate-400 mb-1">لینک تصویر سیاره روی محور (URL)</label>
+          <div class="flex gap-1.5">
+            <input id="planet-url" type="url" dir="ltr" placeholder="https://example.com/planet.png" class="flex-1 bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#3F8FFE]" />
+            <button id="btn-set-planet-url" type="button" class="px-3 py-1.5 rounded-lg bg-[#3F8FFE]/20 hover:bg-[#3F8FFE]/35 border border-[#3F8FFE]/40 text-xs text-blue-200 transition">اعمال</button>
+            <button id="btn-clear-planet-url" type="button" class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-400 transition" title="بازگشت به پیش‌فرض">✕</button>
+          </div>
+        </div>
+
+        <!-- تصویر خورشید -->
+        <div>
+          <label for="sun-url" class="block text-xs text-slate-400 mb-1">لینک تصویر خورشید (URL)</label>
+          <div class="flex gap-1.5">
+            <input id="sun-url" type="url" dir="ltr" placeholder="https://example.com/sun.png" class="flex-1 bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#E5C94E]" />
+            <button id="btn-set-sun-url" type="button" class="px-3 py-1.5 rounded-lg bg-[#E5C94E]/20 hover:bg-[#E5C94E]/35 border border-[#E5C94E]/40 text-xs text-amber-200 transition">اعمال</button>
+            <button id="btn-clear-sun-url" type="button" class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-400 transition" title="بازگشت به پیش‌فرض">✕</button>
+          </div>
+        </div>
+
+        <!-- تنظیمات پس‌زمینه فرم 9:16 -->
+        <div class="pt-2 border-t border-white/10 space-y-2.5">
+          <span class="block text-xs text-slate-300 font-medium">بک‌گراند فرم ۹:۱۶</span>
+
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+              <input id="bg-color-picker" type="color" value="#060911" class="w-8 h-7 rounded bg-transparent border border-white/20 cursor-pointer" />
+              <span>رنگ پس‌زمینه</span>
+            </label>
+
+            <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer mr-auto">
+              <input id="toggle-stars" type="checkbox" checked class="accent-[#3F8FFE] w-4 h-4 rounded" />
+              <span>ستارگان سه‌بعدی</span>
+            </label>
+          </div>
+
+          <!-- کنترل میزان ستارگان رئالیستیک پس‌زمینه -->
+          <div class="space-y-1.5 pt-1">
+            <div class="flex items-center justify-between text-xs">
+              <label for="star-count-input" class="text-slate-400">میزان ستارگان پس‌زمینه</label>
+              <input id="star-count-input" type="number" min="0" max="5000" step="50" value="1500" class="font-mono-num w-20 bg-[#090d17] border border-white/15 rounded-md px-2 py-0.5 text-[11px] text-white text-center focus:outline-none focus:border-[#3F8FFE]" />
+            </div>
+            <input id="star-count-slider" type="range" min="0" max="5000" step="50" value="1500" class="w-full" />
+          </div>
+
+          <div class="flex gap-1.5">
+            <input id="bg-url" type="url" dir="ltr" placeholder="لینک تصویر پس‌زمینه (URL)..." class="flex-1 bg-[#090d17] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-[#3F8FFE]" />
+            <button id="btn-set-bg-url" type="button" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white transition">اعمال</button>
+            <button id="btn-clear-bg-url" type="button" class="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-400 transition" title="حذف تصویر">✕</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- کارت ۶: رنگ عناصر (Hex)، اندازه نشان‌ها و رنگ دایره و محورها -->
+      <section class="bg-[#121827] border border-white/10 rounded-xl p-4 space-y-4">
+        <h2 class="text-sm font-semibold text-white">رنگ عناصر (Hex)، اندازه نشان‌ها و خطوط</h2>
+
+        <!-- اندازه نشان‌ها -->
+        <div class="space-y-1.5 pb-3 border-b border-white/10">
+          <div class="flex items-center justify-between text-xs">
+            <label for="symbol-size-input" class="text-slate-300">اندازه نشان‌ها (px)</label>
+            <input id="symbol-size-input" type="number" min="4" max="16" step="0.5" value="7" class="font-mono-num w-16 bg-[#090d17] border border-white/15 rounded-md px-2 py-0.5 text-[11px] text-white text-center focus:outline-none focus:border-[#3F8FFE]" />
+          </div>
+          <input id="symbol-size-slider" type="range" min="4" max="16" step="0.5" value="7" class="w-full" />
+        </div>
+
+        <!-- رنگ دایره و محورها -->
+        <div class="grid grid-cols-2 gap-2.5 pb-3 border-b border-white/10">
+          <div class="space-y-1">
+            <span class="block text-[11px] text-slate-400">رنگ خطوط دایره</span>
+            <div class="flex items-center gap-1.5">
+              <input id="circle-color-picker" type="color" value="#ffffff" class="w-7 h-7 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+              <input id="circle-color-hex" type="text" dir="ltr" value="#FFFFFF" maxlength="7" class="font-mono-num w-full bg-[#090d17] border border-white/15 rounded-md px-2 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <span class="block text-[11px] text-slate-400">رنگ محور نقطه‌چین</span>
+            <div class="flex items-center gap-1.5">
+              <input id="axis-color-picker" type="color" value="#ffffff" class="w-7 h-7 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+              <input id="axis-color-hex" type="text" dir="ltr" value="#FFFFFF" maxlength="7" class="font-mono-num w-full bg-[#090d17] border border-white/15 rounded-md px-2 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+            </div>
+          </div>
+        </div>
+
+        <!-- رنگ ۴ عنصر (اکتیو و نان‌اکتیو با Hex) -->
+        <div class="space-y-3">
+          <span class="block text-xs text-slate-300 font-medium">رنگ عناصر دایره البروج (اکتیو / نان‌اکتیو)</span>
+
+          <!-- عنصر آتش -->
+          <div class="bg-[#090d17]/70 border border-white/5 rounded-lg p-2.5 space-y-1.5">
+            <div class="text-[11px] text-slate-300 font-medium">آتش <span class="text-slate-500 font-normal">(اریس، لیو، سجتریوس)</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="fire" data-kind="active" type="color" value="#FF4230" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="fire" data-kind="active" type="text" dir="ltr" value="#FF4230" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">نان‌اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="fire" data-kind="inactive" type="color" value="#2e1114" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="fire" data-kind="inactive" type="text" dir="ltr" value="#2E1114" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- عنصر باد -->
+          <div class="bg-[#090d17]/70 border border-white/5 rounded-lg p-2.5 space-y-1.5">
+            <div class="text-[11px] text-slate-300 font-medium">باد <span class="text-slate-500 font-normal">(جمنای، لیبرا، اکواریوس)</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="air" data-kind="active" type="color" value="#E5C94E" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="air" data-kind="active" type="text" dir="ltr" value="#E5C94E" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">نان‌اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="air" data-kind="inactive" type="color" value="#2d2812" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="air" data-kind="inactive" type="text" dir="ltr" value="#2D2812" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- عنصر خاک -->
+          <div class="bg-[#090d17]/70 border border-white/5 rounded-lg p-2.5 space-y-1.5">
+            <div class="text-[11px] text-slate-300 font-medium">خاک <span class="text-slate-500 font-normal">(تارس، ویرگو، کپریکورن)</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="earth" data-kind="active" type="color" value="#5BD850" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="earth" data-kind="active" type="text" dir="ltr" value="#5BD850" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">نان‌اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="earth" data-kind="inactive" type="color" value="#122b18" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="earth" data-kind="inactive" type="text" dir="ltr" value="#122B18" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- عنصر آب -->
+          <div class="bg-[#090d17]/70 border border-white/5 rounded-lg p-2.5 space-y-1.5">
+            <div class="text-[11px] text-slate-300 font-medium">آب <span class="text-slate-500 font-normal">(کنسر، اسکورپیو، پایسیز)</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="water" data-kind="active" type="color" value="#3F8FFE" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="water" data-kind="active" type="text" dir="ltr" value="#3F8FFE" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 mb-1">نان‌اکتیو</span>
+                <div class="flex items-center gap-1.5">
+                  <input data-el="water" data-kind="inactive" type="color" value="#0f203b" class="el-color-picker w-6 h-6 rounded bg-transparent border border-white/20 cursor-pointer shrink-0" />
+                  <input data-el="water" data-kind="inactive" type="text" dir="ltr" value="#0F203B" maxlength="7" class="el-color-hex font-mono-num w-full bg-[#090d17] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white uppercase focus:outline-none focus:border-[#3F8FFE]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- جعبه پیام اعلان غیرمزاحم -->
+  <div id="toast-box" dir="rtl" class="px-4 py-2.5 rounded-xl bg-[#162036] border border-white/15 text-xs text-white shadow-2xl">
+    پیام سیستم
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- اسکریپت اصلی رندر سه‌بعدی Three.js، سمبل‌های وکتور و منطق انیمیشن      -->
+  <!-- ====================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // [تنظیمات دیوریشن / DURATION SETTINGS]
+      // اینجا مدت زمان پیش‌فرض انیمیشن حرکت محور/خورشید و دوربین تنظیم شده است.
+      // مقدار پیش‌فرض: 4 ثانیه (و از طریق فیلد ورودی در پنل نیز کاملاً قابل تغییر است)
+      // =========================================================================
+      const DEFAULT_MOTION_DURATION = 4.0; // ثانیه (مدت زمان پیش‌فرض قرارگیری محور و خورشید)
+      const DEFAULT_CAMERA_DURATION = 4.0; // ثانیه (مدت زمان پیش‌فرض حرکت دوربین و زوم)
+
+      // =========================================================================
+      // [تنظیمات ابعاد دقیق طبق مشخصات تصویر و کاربر / EXACT GEOMETRY DIMENSIONS]
+      // =========================================================================
+      const WHEEL_INNER_DIAMETER = 180;          // قطر دایره اصلی: 180px
+      const WHEEL_INNER_RADIUS = WHEEL_INNER_DIAMETER / 2; // 90px
+      const WHEEL_BAND_HEIGHT = 15;              // ارتفاع نوار دور دایره از خط اصلی: 15px
+      const WHEEL_OUTER_RADIUS = WHEEL_INNER_RADIUS + WHEEL_BAND_HEIGHT; // 105px
+      const SYMBOL_SIZE_PX = 7;                  // اندازه سمبل‌ها: 7px
+      const CENTER_DOT_DIAMETER = 7;             // اندازه نقطه مرکز دایره: 7px (#3F8FFE)
+      const INNER_DOTTED_CIRCLE_RADIUS = 56;     // شعاع دایره نقطه‌چین داخلی (محل دقیق قرارگیری سیاره روی محور)
+      const SUN_ORBIT_RADIUS = 77.5;             // شعاع دقیق خورشید (چسبیده به خط داخلی دایره، بیرون نوار نشان‌ها)
+      const ACTIVE_NAVY_COLOR = '#091122';       // رنگ سورمه‌ای سمبل در حالت فعال (هم‌رنگ پس‌زمینه)
+      const MAX_STAR_COUNT = 5000;               // حداکثر تعداد ستارگان رئالیستیک
+      const DEFAULT_STAR_COUNT = 1500;           // تعداد پیش‌فرض ستارگان
+
+      // موقعیت اولیه دقیقاً مطابق تصویر مرجع (تارس ۲۶ درجه برای محور/ماه و جمنای ۹ درجه برای خورشید)
+      const INITIAL_PLANET_DEG = 56; // 30 (شروع تارس) + 26 = 56 درجه
+      const INITIAL_SUN_DEG = 69;    // 60 (شروع جمنای) + 9  = 69 درجه
+
+      // =========================================================================
+      // [تعریف ۱۲ نشان دایره البروج، بازه درجات، رنگ‌ها، عناصر و مسیرهای وکتور ظریف بدون ایموجی]
+      // =========================================================================
+      const ZODIAC_SIGNS = [
+        {
+          id: 'aries',
+          element: 'fire',
+          faName: 'اریس (فروردین)',
+          enName: 'Aries',
+          startDeg: 0,
+          color: '#FF4230',
+          inactiveBg: '#2e1114',
+          svgContent: `<path d="M12 20.5V9.2C12 5.9 9.5 4.2 7.2 4.8C5.3 5.3 4.8 7.5 6.1 9.1M12 9.2C12 5.9 14.5 4.2 16.8 4.8C18.7 5.3 19.2 7.5 17.9 9.1"/>`
+        },
+        {
+          id: 'taurus',
+          element: 'earth',
+          faName: 'تارس (اردیبهشت)',
+          enName: 'Taurus',
+          startDeg: 30,
+          color: '#5BD850',
+          inactiveBg: '#122b18',
+          svgContent: `<circle cx="12" cy="14.7" r="4.3"/><path d="M6.8 5.2C7.4 8.5 9.5 10.4 12 10.4C14.5 10.4 16.6 8.5 17.2 5.2"/>`
+        },
+        {
+          id: 'gemini',
+          element: 'air',
+          faName: 'جمنای (خرداد)',
+          enName: 'Gemini',
+          startDeg: 60,
+          color: '#E5C94E',
+          inactiveBg: '#2d2812',
+          svgContent: `<path d="M5.8 5.4C9.4 7.1 14.6 7.1 18.2 5.4M5.8 18.6C9.4 16.9 14.6 16.9 18.2 18.6M9.3 6.5V17.5M14.7 6.5V17.5"/>`
+        },
+        {
+          id: 'cancer',
+          element: 'water',
+          faName: 'کنسر (تیر)',
+          enName: 'Cancer',
+          startDeg: 90,
+          color: '#3F8FFE',
+          inactiveBg: '#0f203b',
+          svgContent: `<circle cx="8.2" cy="9.5" r="2.3"/><path d="M8.2 7.2C12.2 5.8 16.4 6.7 19.2 9.8"/><circle cx="15.8" cy="14.5" r="2.3"/><path d="M15.8 16.8C11.8 18.2 7.6 17.3 4.8 14.2"/>`
+        },
+        {
+          id: 'leo',
+          element: 'fire',
+          faName: 'لیو (مرداد)',
+          enName: 'Leo',
+          startDeg: 120,
+          color: '#FF4230',
+          inactiveBg: '#2e1114',
+          svgContent: `<circle cx="8" cy="15.2" r="2.4"/><path d="M9.6 13.3C9 9 10.8 5.2 14.1 5.2C16.9 5.2 18 8 16.3 12C15 15 14.7 17.4 16.5 18.3C17.8 18.9 19.1 17.9 19.4 16.3"/>`
+        },
+        {
+          id: 'virgo',
+          element: 'earth',
+          faName: 'ویرگو (شهریور)',
+          enName: 'Virgo',
+          startDeg: 150,
+          color: '#5BD850',
+          inactiveBg: '#122b18',
+          svgContent: `<path d="M4.8 6.2V16.8M4.8 9.2C4.8 6.6 8.5 6.6 8.5 9.2V16.8M8.5 9.2C8.5 6.6 12.2 6.6 12.2 9.2V15.3C12.2 17.5 13.8 19 15.8 19M12.2 10.5C14.9 8 18.1 9.4 17.3 12.9C16.7 15.8 13.8 17.9 10.8 19.2"/>`
+        },
+        {
+          id: 'libra',
+          element: 'air',
+          faName: 'لیبرا (مهر)',
+          enName: 'Libra',
+          startDeg: 180,
+          color: '#E5C94E',
+          inactiveBg: '#2d2812',
+          svgContent: `<path d="M4.5 17.8H19.5M4.5 14H8.5A3.6 3.6 0 1 1 15.5 14H19.5"/>`
+        },
+        {
+          id: 'scorpio',
+          element: 'water',
+          faName: 'اسکورپیو (آبان)',
+          enName: 'Scorpio',
+          startDeg: 210,
+          color: '#3F8FFE',
+          inactiveBg: '#0f203b',
+          svgContent: `<path d="M4.8 6.2V16.4M4.8 9.2C4.8 6.6 8.4 6.6 8.4 9.2V16.4M8.4 9.2C8.4 6.6 12 6.6 12 9.2V15.3C12 17.5 13.8 18.4 15.8 17.1L18.8 14.8M15.8 14.6L19 14.6L18.5 17.8"/>`
+        },
+        {
+          id: 'sagittarius',
+          element: 'fire',
+          faName: 'سجتریوس (آذر)',
+          enName: 'Sagittarius',
+          startDeg: 240,
+          color: '#FF4230',
+          inactiveBg: '#2e1114',
+          svgContent: `<path d="M5.5 18.5L18.5 5.5M12 5.5H18.5V12M7.5 11.5L12.5 16.5"/>`
+        },
+        {
+          id: 'capricorn',
+          element: 'earth',
+          faName: 'کپریکورن (دی)',
+          enName: 'Capricorn',
+          startDeg: 270,
+          color: '#5BD850',
+          inactiveBg: '#122b18',
+          svgContent: `<path d="M5.2 8.4L7.5 6.2V15.8M7.5 10.2C9.6 6.4 12.8 6.6 12.8 10.3V15.1C12.8 17.7 15.8 18.5 17.5 16.7C18.9 15.1 18.1 12.2 15.8 12.2C13.7 12.2 12.5 14.5 11.5 17.6C10.9 19.2 9.3 19.7 8.2 19.2"/>`
+        },
+        {
+          id: 'aquarius',
+          element: 'air',
+          faName: 'اکواریوس (بهمن)',
+          enName: 'Aquarius',
+          startDeg: 300,
+          color: '#E5C94E',
+          inactiveBg: '#2d2812',
+          svgContent: `<path d="M4.4 9.8L7.4 7.1L10.4 9.8L13.4 7.1L16.4 9.8L19.6 7.1M4.4 15.8L7.4 13.1L10.4 15.8L13.4 13.1L16.4 15.8L19.6 13.1"/>`
+        },
+        {
+          id: 'pisces',
+          element: 'water',
+          faName: 'پایسیز (اسفند)',
+          enName: 'Pisces',
+          startDeg: 330,
+          color: '#3F8FFE',
+          inactiveBg: '#0f203b',
+          svgContent: `<path d="M7 5.2C10.4 8.7 10.4 15.3 7 18.8M17 5.2C13.6 8.7 13.6 15.3 17 18.8M5.4 12H18.6"/>`
+        }
+      ];
+
+      // =========================================================================
+      // [وضعیت اصلی اپلیکیشن / APPLICATION STATE]
+      // =========================================================================
+      const state = {
+        axisDeg: INITIAL_PLANET_DEG,
+        planetDeg: INITIAL_PLANET_DEG,
+        sunDeg: INITIAL_SUN_DEG,
+        planetMoveMode: 'axis',      // 'axis' (حرکت محور و ماه با هم) | 'free' (حرکت آزاد سیاره)
+        motionDirection: 'shortest', // 'shortest' | 'ccw'
+        motionAnim: {
+          active: false,
+          startTime: 0,
+          duration: DEFAULT_MOTION_DURATION,
+          startAxis: INITIAL_PLANET_DEG,
+          targetAxis: INITIAL_PLANET_DEG,
+          startPlanet: INITIAL_PLANET_DEG,
+          targetPlanet: INITIAL_PLANET_DEG,
+          startSun: INITIAL_SUN_DEG,
+          targetSun: INITIAL_SUN_DEG
+        },
+        cameraMode: 'free',          // 'free' | 'planet' | 'axis'
+        camera: {
+          yaw: 0,
+          pitch: 0,
+          zoom: 1,
+          pos: new THREE.Vector3(0, 0, 826),
+          target: new THREE.Vector3(0, 0, 0)
+        },
+        camAnim: {
+          active: false,
+          useSpherical: true,
+          startTime: 0,
+          duration: DEFAULT_CAMERA_DURATION,
+          startPos: new THREE.Vector3(0, 0, 826),
+          startTarget: new THREE.Vector3(0, 0, 0),
+          startYaw: 0,
+          startPitch: 0,
+          startZoom: 1,
+          targetYaw: 0,
+          targetPitch: 0,
+          targetZoom: 1
+        },
+        // وضعیت فید شدن هاله و رنگ هر ۱۲ بخش
+        sectorActiveWeights: new Array(12).fill(0),
+        starsVisible: true,
+        starCount: DEFAULT_STAR_COUNT,
+        symbolSizePx: SYMBOL_SIZE_PX
+      };
+
+      // متغیرهای Three.js
+      let scene, camera, renderer;
+      let stageEl, canvasWrapper;
+      let baseCameraZ = 826;
+      const CAMERA_FOV = 38; // لنز سینمایی بدون اعوجاج (کج و معوج نمی‌شود)
+
+      // آبجکت‌های صحنه
+      let starFieldGroup;
+      let starPoints;
+      let starMaterial;
+      let wheelGroup;       // دایره ثابت در مرکز (0,0,0) - هرگز حرکت نمی‌کند
+      let sectorObjects = [];
+      let circleLineMaterials = [];
+      let axisDotMat;
+      let axisSparkMat;
+      let axisGroup;        // محور نقطه‌چین که حول مرکز می‌چرخد
+      let planetSprite;     // سیاره روی محور (دقیقاً روی دایره نقطه‌چین)
+      let planetGlowSprite;
+      let sunSprite;        // خورشید چسبیده به خط داخلی دایره
+      let sunGlowSprite;
+      let defaultPlanetTexture;
+      let defaultSunTexture;
+
+      // =========================================================================
+      // [توابع کمکی ریاضی و زاویه / MATH & ANGLE HELPERS]
+      // =========================================================================
+
+      /**
+       * تبدیل درجه نجومی (0 تا 360) به زاویه رادیان در مختصات Three.js
+       * مطابق عکس مرجع: 0 درجه اریس در ساعت 5 (زاویه -60 درجه) شروع شده و پادساعتگرد بالا می‌رود
+       */
+      function astroDegToRad(deg) {
+        return THREE.MathUtils.degToRad(-60 + deg);
+      }
+
+      /** نرمال‌سازی زاویه به بازه [0, 360) */
+      function normalizeDeg(deg) {
+        let d = deg % 360;
+        if (d < 0) d += 360;
+        return d;
+      }
+
+      /** تعیین ایندکس نشان فعال (0 تا 11) بر اساس درجه */
+      function getSignIndexFromDeg(deg) {
+        const norm = normalizeDeg(deg);
+        return Math.floor(norm / 30) % 12;
+      }
+
+      /** منحنی نرمی سینمایی (Ease In-Out Cubic) */
+      function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      /** نمایش پیام غیرمزاحم (جایگزین alert) */
+      let toastTimer = null;
+      function showToast(message) {
+        const box = document.getElementById('toast-box');
+        if (!box) return;
+        box.textContent = message;
+        box.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          box.classList.remove('show');
+        }, 3200);
+      }
+
+      // =========================================================================
+      // [تولید تکسچرهای فوق‌شفاف (سمبل‌های وکتور، هاله‌های نور، ماه و خورشید)]
+      // =========================================================================
+
+      /** ساخت تکسچر هاله نور دایره‌ای نرم (Radial Glow) */
+      function createRadialGlowTexture(colorHex, innerAlpha = 0.85, midStop = 0.35) {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const c = new THREE.Color(colorHex);
+        const r = Math.round(c.r * 255);
+        const g = Math.round(c.g * 255);
+        const b = Math.round(c.b * 255);
+
+        const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${innerAlpha})`);
+        grad.addColorStop(midStop, `rgba(${r}, ${g}, ${b}, ${innerAlpha * 0.42})`);
+        grad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${innerAlpha * 0.1})`);
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, size, size);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      /** ساخت تکسچر هاله نور منحصر به هر قطاع ۳۰ درجه‌ای (بصورت فید دور بخش فعال) */
+      function createSectorGlowTexture(colorHex) {
+        const size = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        const cx = size / 2;
+        const cy = size / 2;
+        const c = new THREE.Color(colorHex);
+        const r = Math.round(c.r * 255);
+        const g = Math.round(c.g * 255);
+        const b = Math.round(c.b * 255);
+
+        // مقیاس: کل تصویر تا شعاع 145 واحد را پوشش می‌دهد
+        const maxWorldR = 145;
+        const scale = (size / 2) / maxWorldR;
+        const midBandR = (WHEEL_INNER_RADIUS + WHEEL_OUTER_RADIUS) / 2;
+
+        // رسم یک هاله محو در زاویه 0 (وسط قطاع) که بعداً روی زاویه هر نشان چرخانده می‌شود
+        ctx.save();
+        ctx.translate(cx, cy);
+        const gx = midBandR * scale;
+        const gy = 0;
+        const glowRadius = 50 * scale;
+
+        const grad = ctx.createRadialGradient(gx, gy, 4 * scale, gx, gy, glowRadius);
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.72)`);
+        grad.addColorStop(0.35, `rgba(${r}, ${g}, ${b}, 0.36)`);
+        grad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, 0.10)`);
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(gx, gy, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      /**
+       * ساخت تکسچر وکتور SVG ظریف و کاملاً بدون پیکسل (با میپ‌مپ و آنیزوتروپیک)
+       * روی بوم 512×512 رندر می‌شود تا در هر سایز و زومی کاملاً شارپ و بدون پله‌پله بماند
+       */
+      function createSvgSymbolTexture(svgInnerContent, strokeColor) {
+        const size = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        if (renderer && renderer.capabilities) {
+          tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        }
+
+        const svgString = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"
+               fill="none" stroke="${strokeColor}" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision">
+            ${svgInnerContent}
+          </svg>
+        `.trim();
+
+        const img = new Image();
+        img.onload = function () {
+          ctx.clearRect(0, 0, size, size);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, size, size);
+          tex.needsUpdate = true;
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+
+        return tex;
+      }
+
+      /** اعتبارسنجی و نرمال‌سازی کد رنگ Hex (پشتیبانی از ۳ و ۶ رقمی) */
+      function normalizeHexColor(val) {
+        if (!val) return null;
+        let clean = val.trim();
+        if (!clean.startsWith('#')) clean = '#' + clean;
+        if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
+          clean = '#' + clean[1] + clean[1] + clean[2] + clean[2] + clean[3] + clean[3];
+        }
+        return /^#[0-9a-fA-F]{6}$/.test(clean) ? clean.toUpperCase() : null;
+      }
+
+      /** ساخت تکسچر پیش‌فرض سیاره روی محور (ماه نیمه‌روشن دقیقاً مطابق عکس) */
+      function createDefaultPlanetTexture() {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+        const rad = size * 0.42;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.clip();
+
+        // نیمه تاریک ماه (سمت پایین-چپ)
+        const darkGrad = ctx.createRadialGradient(cx - rad * 0.25, cy + rad * 0.25, 5, cx, cy, rad);
+        darkGrad.addColorStop(0, '#2a3346');
+        darkGrad.addColorStop(1, '#121824');
+        ctx.fillStyle = darkGrad;
+        ctx.fillRect(0, 0, size, size);
+
+        // نیمه روشن ماه (سمت بالا-راست، با زاویه دقیقاً مشابه تصویر مرجع)
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(Math.PI * 0.22); // کجی خط سایه مشابه عکس
+        const lightGrad = ctx.createLinearGradient(0, -rad, 0, 12);
+        lightGrad.addColorStop(0, '#ffffff');
+        lightGrad.addColorStop(0.85, '#dbe4f0');
+        lightGrad.addColorStop(1, '#b6c4d8');
+        ctx.fillStyle = lightGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, rad + 2, Math.PI, 0, false);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.restore();
+
+        // حاشیه ظریف نقره‌ای دور ماه
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      /** ساخت تکسچر پیش‌فرض خورشید (دایره طلایی با حلقه و نقطه مرکزی دقیقاً مطابق عکس) */
+      function createDefaultSunTexture() {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+        const rad = size * 0.42;
+
+        // بدنه اصلی خورشید طلایی
+        const grad = ctx.createRadialGradient(cx - 12, cy - 12, 8, cx, cy, rad);
+        grad.addColorStop(0, '#ffe46b');
+        grad.addColorStop(0.65, '#f6b922');
+        grad.addColorStop(1, '#dc950f');
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // حلقه داخلی تیره (سمبل نجومی خورشید مطابق عکس)
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad * 0.50, 0, Math.PI * 2);
+        ctx.strokeStyle = '#3c2a07';
+        ctx.lineWidth = 10;
+        ctx.stroke();
+
+        // نقطه مرکزی تیره
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad * 0.14, 0, Math.PI * 2);
+        ctx.fillStyle = '#3c2a07';
+        ctx.fill();
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      /** ساخت تکسچر دایره‌ای از تصویر URL کاربر (برای خورشید یا سیاره) */
+      function loadCircularImageTexture(url, onSuccess, onError) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function () {
+          try {
+            const size = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const cx = size / 2;
+            const cy = size / 2;
+            const rad = size * 0.46;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+            ctx.clip();
+
+            // کراپ مرکزی (cover)
+            const scale = Math.max((rad * 2) / img.width, (rad * 2) / img.height);
+            const w = img.width * scale;
+            const h = img.height * scale;
+            ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+            ctx.restore();
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            onSuccess(tex);
+          } catch (err) {
+            onError(err);
+          }
+        };
+        img.onerror = function (err) {
+          onError(err);
+        };
+        img.src = url;
+      }
+
+      // =========================================================================
+      // [ساخت صحنه سه‌بعدی Three.js / BUILD 3D SCENE]
+      // =========================================================================
+
+      function initThreeScene() {
+        stageEl = document.getElementById('stage-9-16');
+        canvasWrapper = document.getElementById('stage-canvas-wrapper');
+
+        scene = new THREE.Scene();
+
+        const width = canvasWrapper.clientWidth || 320;
+        const height = canvasWrapper.clientHeight || 569;
+
+        camera = new THREE.PerspectiveCamera(CAMERA_FOV, width / height, 1, 4000);
+        updateBaseCameraDistance(height);
+        camera.position.set(0, 0, baseCameraZ);
+        camera.lookAt(0, 0, 0);
+
+        // رندرر شفاف (alpha: true) تا بک‌گراند رنگ یا تصویر URL بدون خطای CORS نمایش داده شود
+        renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+          powerPreference: 'high-performance'
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(width, height);
+        renderer.setClearColor(0x000000, 0);
+        canvasWrapper.appendChild(renderer.domElement);
+
+        // ساخت لایه‌های صحنه
+        build3DStarfield();
+        buildZodiacWheel();
+        buildRotatingAxisAndBodies();
+
+        // همگام‌سازی موقعیت اولیه دقیقاً مطابق عکس
+        updateBodiesPositions();
+        state.sectorActiveWeights[getSignIndexFromDeg(state.planetDeg)] = 1;
+        updateSectorVisuals(1);
+
+        // تنظیم دوربین اولیه
+        const initCam = computeDesiredCameraState();
+        state.camera.pos.copy(initCam.pos);
+        state.camera.target.copy(initCam.target);
+        camera.position.copy(initCam.pos);
+        camera.lookAt(initCam.target);
+
+        window.addEventListener('resize', handleResize);
+        if (typeof ResizeObserver !== 'undefined') {
+          const ro = new ResizeObserver(() => handleResize());
+          ro.observe(canvasWrapper);
+        }
+      }
+
+      /** محاسبه فاصله پایه دوربین برای حفظ دقیق تناسب ۹:۱۶ در تمام اندازه‌های استیج */
+      function updateBaseCameraDistance() {
+        const refHeight = 569;
+        baseCameraZ = (refHeight / 2) / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+      }
+
+      /** ساخت کهکشان و ستارگان سه‌بعدی کاملاً رئالیستیک با قابلیت تغییر تعداد دلخواه */
+      function build3DStarfield() {
+        starFieldGroup = new THREE.Group();
+        const positions = new Float32Array(MAX_STAR_COUNT * 3);
+        const colors = new Float32Array(MAX_STAR_COUNT * 3);
+        const sizes = new Float32Array(MAX_STAR_COUNT);
+        const alphas = new Float32Array(MAX_STAR_COUNT);
+        const phases = new Float32Array(MAX_STAR_COUNT);
+
+        for (let i = 0; i < MAX_STAR_COUNT; i++) {
+          // توزیع کروی سه‌بعدی واقعی در عمق فضا
+          const radius = 420 + Math.random() * 1450;
+          const u = Math.random();
+          const v = Math.random();
+          const theta = 2 * Math.PI * u;
+          const phi = Math.acos(2 * v - 1);
+
+          positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+          positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+          positions[i * 3 + 2] = radius * Math.cos(phi);
+
+          // توزیع واقعی قدر ستارگان: بیشتر ستاره‌ها ریز و ظریف، تعداد کمی درخشان‌تر
+          const magRand = Math.pow(Math.random(), 4.2);
+          sizes[i] = 1.15 + magRand * 4.4;
+          alphas[i] = 0.28 + Math.pow(Math.random(), 1.6) * 0.72;
+          phases[i] = Math.random() * Math.PI * 2;
+
+          // طیف رنگی طبیعی ستارگان واقعی (سفید خالص، آبی کم‌رنگ، طلایی ملایم)
+          const tint = Math.random();
+          let r = 1.0, g = 1.0, b = 1.0;
+          if (tint < 0.28) {
+            r = 0.80; g = 0.89; b = 1.0;
+          } else if (tint > 0.84) {
+            r = 1.0; g = 0.93; b = 0.82;
+          } else {
+            r = 0.96; g = 0.97; b = 1.0;
+          }
+
+          colors[i * 3] = r;
+          colors[i * 3 + 1] = g;
+          colors[i * 3 + 2] = b;
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+        geo.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
+        geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+        geo.setDrawRange(0, state.starCount);
+
+        starMaterial = new THREE.ShaderMaterial({
+          uniforms: {
+            uTime: { value: 0 },
+            uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) }
+          },
+          vertexShader: `
+            attribute float aSize;
+            attribute float aAlpha;
+            attribute float aPhase;
+            varying vec3 vColor;
+            varying float vAlpha;
+            uniform float uTime;
+            uniform float uPixelRatio;
+            void main() {
+              vColor = color;
+              float twinkle = 0.84 + 0.16 * sin(uTime * 1.4 + aPhase);
+              vAlpha = aAlpha * twinkle;
+              vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+              float distScale = 760.0 / max(120.0, -mvPosition.z);
+              gl_PointSize = clamp(aSize * uPixelRatio * distScale, 1.0, 9.5);
+              gl_Position = projectionMatrix * mvPosition;
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vColor;
+            varying float vAlpha;
+            void main() {
+              vec2 cxy = 2.0 * gl_PointCoord - 1.0;
+              float r2 = dot(cxy, cxy);
+              if (r2 > 1.0) discard;
+              // هسته تیز و واقعی ستاره + هاله بسیار ظریف
+              float core = exp(-r2 * 14.0);
+              float halo = 0.34 * exp(-r2 * 4.2);
+              float strength = clamp(core + halo, 0.0, 1.0);
+              gl_FragColor = vec4(vColor, strength * vAlpha);
+            }
+          `,
+          transparent: true,
+          depthWrite: false,
+          vertexColors: true,
+          blending: THREE.AdditiveBlending
+        });
+
+        starPoints = new THREE.Points(geo, starMaterial);
+        starFieldGroup.add(starPoints);
+        scene.add(starFieldGroup);
+      }
+
+      /** ساخت دایره ثابت البروج در مرکز (0, 0, 0) با تمام جزئیات عکس */
+      function buildZodiacWheel() {
+        wheelGroup = new THREE.Group();
+        scene.add(wheelGroup);
+
+        // ۱. ساخت ۱۲ بخش ۳۰ درجه‌ای (نوار دور دایره به ارتفاع 15px)
+        const symbolOrbitR = (WHEEL_INNER_RADIUS + WHEEL_OUTER_RADIUS) / 2; // 97.5px
+
+        ZODIAC_SIGNS.forEach((sign, idx) => {
+          const startRad = astroDegToRad(sign.startDeg);
+          const sweepRad = THREE.MathUtils.degToRad(30);
+          const midRad = startRad + sweepRad / 2;
+
+          // مش نوار هر بخش
+          const wedgeGeo = new THREE.RingGeometry(
+            WHEEL_INNER_RADIUS,
+            WHEEL_OUTER_RADIUS,
+            32,
+            1,
+            startRad,
+            sweepRad
+          );
+          const inactiveColor = new THREE.Color(sign.inactiveBg);
+          const activeColor = new THREE.Color(sign.color);
+
+          const wedgeMat = new THREE.MeshBasicMaterial({
+            color: inactiveColor.clone(),
+            transparent: true,
+            opacity: 0.78,
+            side: THREE.DoubleSide
+          });
+          const wedgeMesh = new THREE.Mesh(wedgeGeo, wedgeMat);
+          wedgeMesh.position.z = 0;
+          wheelGroup.add(wedgeMesh);
+
+          // هاله نور فیدشونده برای هر بخش (پشت نوار)
+          const glowTex = createSectorGlowTexture(sign.color);
+          const glowGeo = new THREE.PlaneGeometry(290, 290);
+          const glowMat = new THREE.MeshBasicMaterial({
+            map: glowTex,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide
+          });
+          const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+          glowMesh.rotation.z = midRad;
+          glowMesh.position.z = -0.5;
+          wheelGroup.add(glowMesh);
+
+          // سمبل وکتور هر نشان (اندازه دقیق 7px، ایستاده و شفاف)
+          // دو لایه برای فید نرم بین رنگ عادی و رنگ سورمه‌ای هنگام فعال شدن
+          const sx = Math.cos(midRad) * symbolOrbitR;
+          const sy = Math.sin(midRad) * symbolOrbitR;
+
+          // اندازه بوم سمبل طوری تنظیم می‌شود که بخش رسم‌شده معادل 7px-8px دقیق داخل نوار 15px باشد
+          const symPlaneSize = SYMBOL_SIZE_PX * 1.35;
+          const symGeo = new THREE.PlaneGeometry(symPlaneSize, symPlaneSize);
+
+          const coloredTex = createSvgSymbolTexture(sign.svgContent, sign.color);
+          const coloredMat = new THREE.MeshBasicMaterial({
+            map: coloredTex,
+            transparent: true,
+            opacity: 1,
+            depthWrite: false,
+            side: THREE.DoubleSide
+          });
+          const coloredMesh = new THREE.Mesh(symGeo, coloredMat);
+          coloredMesh.position.set(sx, sy, 0.4);
+          wheelGroup.add(coloredMesh);
+
+          const navyTex = createSvgSymbolTexture(sign.svgContent, ACTIVE_NAVY_COLOR);
+          const navyMat = new THREE.MeshBasicMaterial({
+            map: navyTex,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            side: THREE.DoubleSide
+          });
+          const navyMesh = new THREE.Mesh(symGeo, navyMat);
+          navyMesh.position.set(sx, sy, 0.45);
+          wheelGroup.add(navyMesh);
+
+          sectorObjects.push({
+            sign,
+            wedgeMat,
+            glowMat,
+            coloredMat,
+            navyMat,
+            coloredMesh,
+            navyMesh,
+            inactiveColor,
+            activeColor
+          });
+        });
+
+        // ۲. خطوط سفید با اپاسیتی 70% برای دایره داخلی، دایره بیرونی و ۱۲ خط جداکننده
+        const whiteLineMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.7,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+
+        // خط دایره اصلی داخلی (شعاع 90px / قطر 180px)
+        const innerRingMesh = new THREE.Mesh(
+          new THREE.RingGeometry(WHEEL_INNER_RADIUS - 0.42, WHEEL_INNER_RADIUS + 0.42, 180),
+          whiteLineMat
+        );
+        innerRingMesh.position.z = 0.25;
+        wheelGroup.add(innerRingMesh);
+
+        // خط دایره بیرونی (شعاع 105px)
+        const outerRingMesh = new THREE.Mesh(
+          new THREE.RingGeometry(WHEEL_OUTER_RADIUS - 0.42, WHEEL_OUTER_RADIUS + 0.42, 180),
+          whiteLineMat
+        );
+        outerRingMesh.position.z = 0.25;
+        wheelGroup.add(outerRingMesh);
+
+        // ۱۲ خط جداکننده بین بخش‌ها
+        const dividerGeo = new THREE.PlaneGeometry(WHEEL_BAND_HEIGHT, 0.75);
+        for (let i = 0; i < 12; i++) {
+          const rad = astroDegToRad(i * 30);
+          const divMesh = new THREE.Mesh(dividerGeo, whiteLineMat);
+          const midR = WHEEL_INNER_RADIUS + WHEEL_BAND_HEIGHT / 2;
+          divMesh.position.set(Math.cos(rad) * midR, Math.sin(rad) * midR, 0.28);
+          divMesh.rotation.z = rad;
+          wheelGroup.add(divMesh);
+        }
+
+        // ۳. خط‌کش درجه‌های ظریف داخل دایره اصلی (مشابه تصویر مرجع)
+        const tickMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.42,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        for (let deg = 0; deg < 360; deg += 5) {
+          if (deg % 30 === 0) continue; // خط اصلی دارد
+          const rad = astroDegToRad(deg);
+          const isMajor = deg % 10 === 0;
+          const tickLen = isMajor ? 3.2 : 1.7;
+          const tickGeo = new THREE.PlaneGeometry(tickLen, 0.45);
+          const tickMesh = new THREE.Mesh(tickGeo, tickMat);
+          const r = WHEEL_INNER_RADIUS - tickLen / 2 - 0.3;
+          tickMesh.position.set(Math.cos(rad) * r, Math.sin(rad) * r, 0.22);
+          tickMesh.rotation.z = rad;
+          wheelGroup.add(tickMesh);
+        }
+
+        // ۴. دایره داخلی با خطوط فاصله‌دار و نقطه‌چین (سفید اپاسیتی 70% مطابق عکس)
+        const dotCount = 112;
+        const dotGeo = new THREE.CircleGeometry(0.55, 8);
+        const dotMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.7,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        circleLineMaterials = [whiteLineMat, tickMat, dotMat];
+        for (let i = 0; i < dotCount; i++) {
+          const a = (i / dotCount) * Math.PI * 2;
+          const dot = new THREE.Mesh(dotGeo, dotMat);
+          dot.position.set(
+            Math.cos(a) * INNER_DOTTED_CIRCLE_RADIUS,
+            Math.sin(a) * INNER_DOTTED_CIRCLE_RADIUS,
+            0.22
+          );
+          wheelGroup.add(dot);
+        }
+
+        // ۵. نقطه مرکز دایره به اندازه دقیق 7px و رنگ #3F8FFE به همراه هاله آبی نرم
+        const centerGlowTex = createRadialGlowTexture('#3F8FFE', 0.65, 0.28);
+        const centerGlowMat = new THREE.SpriteMaterial({
+          map: centerGlowTex,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        });
+        const centerGlow = new THREE.Sprite(centerGlowMat);
+        centerGlow.scale.set(36, 36, 1);
+        centerGlow.position.set(0, 0, 0.6);
+        wheelGroup.add(centerGlow);
+
+        // گوی سه‌بعدی مرکز دایره (قطر دقیق 7px) تا در زاویه‌های ۳D حجم واقعی داشته باشد
+        const centerSphereGeo = new THREE.SphereGeometry(CENTER_DOT_DIAMETER / 2, 24, 24);
+        const centerSphereMat = new THREE.MeshBasicMaterial({ color: 0x3F8FFE });
+        const centerSphere = new THREE.Mesh(centerSphereGeo, centerSphereMat);
+        centerSphere.position.set(0, 0, 0.8);
+        wheelGroup.add(centerSphere);
+      }
+
+      /** ساخت محور نقطه‌چین چرخان، نقطه اتصال درخشان، سیاره روی محور و خورشید */
+      function buildRotatingAxisAndBodies() {
+        // محور نقطه‌چین از مرکز دایره تا خط داخلی دایره (رنگ سفید اپاسیتی 70%)
+        axisGroup = new THREE.Group();
+        scene.add(axisGroup);
+
+        const axisDotGeo = new THREE.CircleGeometry(0.65, 8);
+        axisDotMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.7,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+
+        const startR = 6.5;
+        const endR = WHEEL_INNER_RADIUS - 1.5;
+        const numAxisDots = 24;
+        for (let i = 0; i <= numAxisDots; i++) {
+          const r = startR + (i / numAxisDots) * (endR - startR);
+          const dot = new THREE.Mesh(axisDotGeo, axisDotMat);
+          dot.position.set(r, 0, 0.5);
+          axisGroup.add(dot);
+        }
+
+        // نقطه درخشان محل برخورد محور با خط داخلی دایره (دقیقاً مشابه عکس)
+        const sparkTex = createRadialGlowTexture('#ffffff', 1.0, 0.25);
+        axisSparkMat = new THREE.SpriteMaterial({
+          map: sparkTex,
+          color: 0xffffff,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        });
+        const sparkSprite = new THREE.Sprite(axisSparkMat);
+        sparkSprite.scale.set(13, 13, 1);
+        sparkSprite.position.set(WHEEL_INNER_RADIUS, 0, 1.0);
+        axisGroup.add(sparkSprite);
+
+        // سیاره روی محور (دقیقاً روی تقاطع محور و دایره نقطه‌چین داخلی)
+        defaultPlanetTexture = createDefaultPlanetTexture();
+        const planetGlowTex = createRadialGlowTexture('#c8d8f0', 0.52, 0.3);
+        planetGlowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: planetGlowTex,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        }));
+        planetGlowSprite.scale.set(34, 34, 1);
+        scene.add(planetGlowSprite);
+
+        planetSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: defaultPlanetTexture,
+          transparent: true,
+          depthWrite: false
+        }));
+        planetSprite.scale.set(14.5, 14.5, 1);
+        scene.add(planetSprite);
+
+        // خورشید (چسبیده به خط داخلی دایره، بیرون نوار نشان‌ها)
+        defaultSunTexture = createDefaultSunTexture();
+        const sunGlowTex = createRadialGlowTexture('#ffca3a', 0.72, 0.3);
+        sunGlowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: sunGlowTex,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        }));
+        sunGlowSprite.scale.set(44, 44, 1);
+        scene.add(sunGlowSprite);
+
+        sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: defaultSunTexture,
+          transparent: true,
+          depthWrite: false
+        }));
+        sunSprite.scale.set(15.5, 15.5, 1);
+        scene.add(sunSprite);
+      }
+
+      /** به‌روزرسانی دقیق مختصات محور، سیاره و خورشید */
+      function updateBodiesPositions() {
+        const aRad = astroDegToRad(state.axisDeg);
+        const pRad = astroDegToRad(state.planetDeg);
+        const sRad = astroDegToRad(state.sunDeg);
+
+        // چرخش محور حول مرکز ثابت (0,0) روی دایره نقطه‌چین
+        axisGroup.rotation.z = aRad;
+
+        // قرارگیری دقیق سیاره روی دایره نقطه‌چین داخلی (همراه محور یا به صورت آزاد)
+        const px = Math.cos(pRad) * INNER_DOTTED_CIRCLE_RADIUS;
+        const py = Math.sin(pRad) * INNER_DOTTED_CIRCLE_RADIUS;
+        planetGlowSprite.position.set(px, py, 1.3);
+        planetSprite.position.set(px, py, 1.8);
+
+        // قرارگیری دقیق خورشید چسبیده به خط داخلی دایره (بیرون نشان)
+        const sx = Math.cos(sRad) * SUN_ORBIT_RADIUS;
+        const sy = Math.sin(sRad) * SUN_ORBIT_RADIUS;
+        sunGlowSprite.position.set(sx, sy, 1.2);
+        sunSprite.position.set(sx, sy, 1.7);
+      }
+
+      /**
+       * فید نرم رنگ پس‌زمینه نشان، رنگ سمبل (به سورمه‌ای) و هاله نور هر بخش
+       * هنگام عبور محور از هر بازه ۳۰ درجه‌ای
+       */
+      function updateSectorVisuals(lerpFactor) {
+        const activeIdx = getSignIndexFromDeg(state.axisDeg);
+
+        for (let i = 0; i < 12; i++) {
+          const targetWeight = i === activeIdx ? 1 : 0;
+          state.sectorActiveWeights[i] += (targetWeight - state.sectorActiveWeights[i]) * lerpFactor;
+          const w = state.sectorActiveWeights[i];
+
+          const obj = sectorObjects[i];
+          // تغییر نرم رنگ پس‌زمینه نوار
+          obj.wedgeMat.color.copy(obj.inactiveColor).lerp(obj.activeColor, w);
+          obj.wedgeMat.opacity = 0.78 + w * 0.22;
+
+          // فید هاله نور دور بخش فعال
+          obj.glowMat.opacity = w * 0.82;
+
+          // کراس‌فید سمبل بین رنگ نشان و رنگ سورمه‌ای
+          obj.coloredMat.opacity = 1 - w;
+          obj.navyMat.opacity = w;
+        }
+      }
+
+      // =========================================================================
+      // [سیستم دوربین سه‌بعدی رئالیستیک / REALISTIC 3D CAMERA ENGINE]
+      // =========================================================================
+
+      /**
+       * محاسبه موقعیت و نقطه دید هدف دوربین بر اساس ۳ حالت:
+       * 1. free: زاویه دلخواه سه‌بعدی با نشانگر (Yaw / Pitch / Zoom)
+       * 2. planet: قرارگیری سه‌بعدی مستقیم روبروی سیاره (هرجا که سیاره باشد)
+       * 3. axis: حرکت سه‌بعدی همراه با محور عمودی/شعاعی با عمق واقعی
+       */
+      function computeDesiredCameraState(customYaw, customPitch, customZoom) {
+        const yawDeg = customYaw !== undefined ? customYaw : state.camera.yaw;
+        const pitchDeg = customPitch !== undefined ? customPitch : state.camera.pitch;
+        const zoom = Math.max(0.4, customZoom !== undefined ? customZoom : state.camera.zoom);
+
+        const pos = new THREE.Vector3();
+        const target = new THREE.Vector3(0, 0, 0);
+
+        if (state.cameraMode === 'free') {
+          // دوربین کروی رئالیستیک حول مرکز ثابت دایره
+          const dist = baseCameraZ / zoom;
+          const yawRad = THREE.MathUtils.degToRad(yawDeg);
+          const pitchRad = THREE.MathUtils.degToRad(pitchDeg);
+
+          pos.x = dist * Math.cos(pitchRad) * Math.sin(yawRad);
+          pos.y = dist * Math.sin(pitchRad);
+          pos.z = dist * Math.cos(pitchRad) * Math.cos(yawRad);
+          target.set(0, 0, 0);
+        }
+        else if (state.cameraMode === 'planet') {
+          // زاویه سه‌بعدی دقیقاً روبروی سیاره:
+          // دوربین با عمق سه‌بعدی واقعی مقابل سیاره می‌ایستد و سیاره + نشان روشن‌شده پشت آن را قاب می‌گیرد
+          const pRad = astroDegToRad(state.planetDeg);
+          const px = Math.cos(pRad) * INNER_DOTTED_CIRCLE_RADIUS;
+          const py = Math.sin(pRad) * INNER_DOTTED_CIRCLE_RADIUS;
+
+          // نقطه نگاه روی سیاره و کمی متمایل به لبه نشان
+          target.set(px * 1.05, py * 1.05, 1.2);
+
+          // فاصله دوربین از سیاره (متناسب با زوم کاربر)
+          const camDist = 250 / zoom;
+          const yawOffset = THREE.MathUtils.degToRad(yawDeg * 0.35);
+          const pitchOffset = THREE.MathUtils.degToRad(Math.max(-45, Math.min(45, pitchDeg * 0.45)));
+
+          // بردار ایستادن مقابل سیاره (به سمت داخل مرکز و کمی بالاتر در محور Z برای دید رئالیستیک)
+          const backAngle = pRad + Math.PI + yawOffset;
+          const horizDist = camDist * 0.56 * Math.cos(pitchOffset);
+          const zHeight = camDist * 0.82 + Math.sin(pitchOffset) * camDist * 0.25;
+
+          pos.set(
+            px + Math.cos(backAngle) * horizDist,
+            py + Math.sin(backAngle) * horizDist,
+            Math.max(45, zHeight)
+          );
+        }
+        else if (state.cameraMode === 'axis') {
+          // زاویه دوربین همراه با محور عمودی و چرخش محور:
+          // افق کاملاً صاف می‌ماند و دوربین با زاویه سینمایی رئالیستیک در امتداد محور حرکت می‌کند
+          const pRad = astroDegToRad(state.axisDeg);
+          const midX = Math.cos(pRad) * (INNER_DOTTED_CIRCLE_RADIUS * 0.65);
+          const midY = Math.sin(pRad) * (INNER_DOTTED_CIRCLE_RADIUS * 0.65);
+
+          target.set(midX, midY, 0);
+
+          const dist = (baseCameraZ * 0.62) / zoom;
+          // دوربین با زاویه عمودی مایل (انگار کنار محور ایستاده‌ای) همراه محور حرکت می‌کند
+          const tiltRad = THREE.MathUtils.degToRad(34 + pitchDeg * 0.35);
+          const sideAngle = pRad + THREE.MathUtils.degToRad(yawDeg * 0.35);
+
+          pos.set(
+            midX - Math.cos(sideAngle) * dist * Math.sin(tiltRad),
+            midY - Math.sin(sideAngle) * dist * Math.sin(tiltRad) - dist * 0.22,
+            dist * Math.cos(tiltRad)
+          );
+        }
+
+        return { pos, target };
+      }
+
+      /** شروع انیمیشن نرم دوربین با دیوریشن تعیین‌شده */
+      function triggerCameraAnimation(targetYaw, targetPitch, targetZoom, durationSec, startFromNeutral = false, useSpherical = false) {
+        const dur = Math.max(0.15, durationSec);
+        state.camAnim.active = true;
+        state.camAnim.useSpherical = Boolean(useSpherical && state.cameraMode === 'free');
+        state.camAnim.startTime = performance.now();
+        state.camAnim.duration = dur;
+
+        if (startFromNeutral) {
+          state.camAnim.startPos.set(0, 0, baseCameraZ);
+          state.camAnim.startTarget.set(0, 0, 0);
+          state.camAnim.startYaw = 0;
+          state.camAnim.startPitch = 0;
+          state.camAnim.startZoom = 1;
+          camera.position.set(0, 0, baseCameraZ);
+          state.camera.target.set(0, 0, 0);
+        } else {
+          state.camAnim.startPos.copy(camera.position);
+          state.camAnim.startTarget.copy(state.camera.target);
+          state.camAnim.startYaw = state.camera.yaw;
+          state.camAnim.startPitch = state.camera.pitch;
+          state.camAnim.startZoom = state.camera.zoom;
+        }
+
+        state.camAnim.targetYaw = targetYaw;
+        state.camAnim.targetPitch = targetPitch;
+        state.camAnim.targetZoom = targetZoom;
+
+        state.camera.yaw = targetYaw;
+        state.camera.pitch = targetPitch;
+        state.camera.zoom = targetZoom;
+      }
+
+      // =========================================================================
+      // [حلقه اصلی رندر و انیمیشن / MAIN ANIMATION LOOP]
+      // =========================================================================
+      let lastFrameTime = performance.now();
+
+      function animate(now) {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        // ۱. آپدیت انیمیشن حرکت محور (سیاره) و خورشید با دیوریشن تعیین‌شده (پیش‌فرض ۴ ثانیه)
+        if (state.motionAnim.active) {
+          const elapsed = (now - state.motionAnim.startTime) / 1000;
+          const progress = Math.min(1, elapsed / state.motionAnim.duration);
+          const eased = easeInOutCubic(progress);
+
+          state.axisDeg = state.motionAnim.startAxis +
+            (state.motionAnim.targetAxis - state.motionAnim.startAxis) * eased;
+          state.planetDeg = state.motionAnim.startPlanet +
+            (state.motionAnim.targetPlanet - state.motionAnim.startPlanet) * eased;
+          state.sunDeg = state.motionAnim.startSun +
+            (state.motionAnim.targetSun - state.motionAnim.startSun) * eased;
+
+          updateBodiesPositions();
+
+          if (progress >= 1) {
+            state.axisDeg = normalizeDeg(state.motionAnim.targetAxis);
+            state.planetDeg = normalizeDeg(state.motionAnim.targetPlanet);
+            state.sunDeg = normalizeDeg(state.motionAnim.targetSun);
+            state.motionAnim.active = false;
+            updateBodiesPositions();
+          }
+        }
+
+        // ۲. فید نرم هاله نور و رنگ نشان فعال (سرعت فید طبیعی)
+        const fadeSpeed = 1 - Math.exp(-dt * 8.5);
+        updateSectorVisuals(fadeSpeed);
+
+        // ۳. چرخش خیلی آرام و رئالیستیک ستارگان در عمق فضا
+        if (starFieldGroup) {
+          starFieldGroup.visible = state.starsVisible;
+          starFieldGroup.rotation.y += dt * 0.008;
+          starFieldGroup.rotation.x += dt * 0.003;
+        }
+        if (starMaterial) {
+          starMaterial.uniforms.uTime.value = now * 0.001;
+        }
+
+        // ۴. آپدیت دوربین سه‌بعدی
+        if (state.camAnim.active) {
+          const elapsed = (now - state.camAnim.startTime) / 1000;
+          const progress = Math.min(1, elapsed / state.camAnim.duration);
+          const eased = easeInOutCubic(progress);
+
+          if (state.camAnim.useSpherical && state.cameraMode === 'free') {
+            // حرکت کروی کاملاً طبیعی (بدون عبور از داخل دایره یا کج شدن)
+            const curYaw = state.camAnim.startYaw + (state.camAnim.targetYaw - state.camAnim.startYaw) * eased;
+            const curPitch = state.camAnim.startPitch + (state.camAnim.targetPitch - state.camAnim.startPitch) * eased;
+            const curZoom = state.camAnim.startZoom + (state.camAnim.targetZoom - state.camAnim.startZoom) * eased;
+            const desired = computeDesiredCameraState(curYaw, curPitch, curZoom);
+            camera.position.copy(desired.pos);
+            state.camera.target.lerpVectors(state.camAnim.startTarget, desired.target, eased);
+          } else {
+            const desired = computeDesiredCameraState();
+            camera.position.lerpVectors(state.camAnim.startPos, desired.pos, eased);
+            state.camera.target.lerpVectors(state.camAnim.startTarget, desired.target, eased);
+          }
+
+          camera.up.set(0, 1, 0);
+          camera.lookAt(state.camera.target);
+
+          if (progress >= 1) {
+            state.camAnim.active = false;
+          }
+        } else {
+          // پیگیری نرم دوربین (به‌خصوص در حالت روبروی سیاره و همراه با محور هنگام حرکت محور)
+          const desired = computeDesiredCameraState();
+          const followRate = state.motionAnim.active && state.cameraMode !== 'free' ? 10.5 : 7.0;
+          const smooth = 1 - Math.exp(-dt * followRate);
+          camera.position.lerp(desired.pos, smooth);
+          state.camera.target.lerp(desired.target, smooth);
+          camera.up.set(0, 1, 0);
+          camera.lookAt(state.camera.target);
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      /** مدیریت تغییر سایز صفحه با حفظ نسبت ۹:۱۶ */
+      function handleResize() {
+        if (!canvasWrapper || !renderer || !camera) return;
+        const w = canvasWrapper.clientWidth || 320;
+        const h = canvasWrapper.clientHeight || 569;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(w, h);
+        if (starMaterial) {
+          starMaterial.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio || 1, 2);
+        }
+      }
+
+      // =========================================================================
+      // [اتصال و منطق کنترل پنل سمت راست / CONTROL PANEL UI BINDINGS]
+      // =========================================================================
+
+      function initUI() {
+        const planetSignSel = document.getElementById('planet-sign');
+        const sunSignSel = document.getElementById('sun-sign');
+        const planetDegInput = document.getElementById('planet-deg');
+        const planetDegSlider = document.getElementById('planet-deg-slider');
+        const sunDegInput = document.getElementById('sun-deg');
+        const sunDegSlider = document.getElementById('sun-deg-slider');
+        const planetBadge = document.getElementById('planet-total-deg-badge');
+        const sunBadge = document.getElementById('sun-total-deg-badge');
+
+        const motionDurInput = document.getElementById('motion-duration');
+        const camDurInput = document.getElementById('camera-duration');
+
+        const yawSlider = document.getElementById('cam-yaw');
+        const pitchSlider = document.getElementById('cam-pitch');
+        const zoomSlider = document.getElementById('cam-zoom');
+        const yawValEl = document.getElementById('yaw-val');
+        const pitchValEl = document.getElementById('pitch-val');
+        const zoomValEl = document.getElementById('zoom-val');
+
+        const gizmo = document.getElementById('camera-gizmo');
+        const gizmoKnob = document.getElementById('gizmo-knob');
+
+        // پر کردن لیست ۱۲ نشان برای سیاره و خورشید
+        ZODIAC_SIGNS.forEach((sign, idx) => {
+          const opt1 = document.createElement('option');
+          opt1.value = idx;
+          opt1.textContent = `${sign.faName} (${sign.startDeg}°-${sign.startDeg + 30}°)`;
+          planetSignSel.appendChild(opt1);
+
+          const opt2 = document.createElement('option');
+          opt2.value = idx;
+          opt2.textContent = `${sign.faName} (${sign.startDeg}°-${sign.startDeg + 30}°)`;
+          sunSignSel.appendChild(opt2);
+        });
+
+        // مقادیر پیش‌فرض مطابق عکس (تارس ۲۶ درجه، جمنای ۹ درجه)
+        planetSignSel.value = '1'; // Taurus
+        sunSignSel.value = '2';    // Gemini
+        motionDurInput.value = DEFAULT_MOTION_DURATION;
+        camDurInput.value = DEFAULT_CAMERA_DURATION;
+
+        function updateDegreeBadges() {
+          const pTotal = Number(planetSignSel.value) * 30 + clamp(parseFloat(planetDegInput.value) || 0, 0, 30);
+          const sTotal = Number(sunSignSel.value) * 30 + clamp(parseFloat(sunDegInput.value) || 0, 0, 30);
+          planetBadge.textContent = `${normalizeDeg(pTotal).toFixed(1)}°`;
+          sunBadge.textContent = `${normalizeDeg(sTotal).toFixed(1)}°`;
+        }
+
+        function clamp(v, min, max) {
+          return Math.max(min, Math.min(max, v));
+        }
+
+        // همگام‌سازی اینپوت و اسلایدر درجات
+        planetDegInput.addEventListener('input', () => {
+          planetDegSlider.value = clamp(parseFloat(planetDegInput.value) || 0, 0, 30);
+          updateDegreeBadges();
+        });
+        planetDegSlider.addEventListener('input', () => {
+          planetDegInput.value = planetDegSlider.value;
+          updateDegreeBadges();
+        });
+        planetSignSel.addEventListener('change', updateDegreeBadges);
+
+        sunDegInput.addEventListener('input', () => {
+          sunDegSlider.value = clamp(parseFloat(sunDegInput.value) || 0, 0, 30);
+          updateDegreeBadges();
+        });
+        sunDegSlider.addEventListener('input', () => {
+          sunDegInput.value = sunDegSlider.value;
+          updateDegreeBadges();
+        });
+        sunSignSel.addEventListener('change', updateDegreeBadges);
+        updateDegreeBadges();
+
+        // انتخاب حالت حرکت: حرکت محور (خط نقطه‌چین) یا حرکت آزاد سیاره روی دایره نقطه‌چین
+        document.querySelectorAll('.move-mode-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.planetMoveMode = btn.dataset.moveMode;
+            document.querySelectorAll('.move-mode-btn').forEach((b) => {
+              b.classList.remove('bg-[#3F8FFE]', 'text-white', 'font-medium');
+              b.classList.add('text-slate-400');
+            });
+            btn.classList.add('bg-[#3F8FFE]', 'text-white', 'font-medium');
+            btn.classList.remove('text-slate-400');
+
+            showToast(
+              state.planetMoveMode === 'axis'
+                ? 'حالت حرکت محور (خط نقطه‌چین) همراه با ماه فعال شد'
+                : 'حالت حرکت آزاد سیاره روی دایره نقطه‌چین فعال شد'
+            );
+          });
+        });
+
+        // انتخاب جهت چرخش محور
+        document.querySelectorAll('.dir-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.motionDirection = btn.dataset.dir;
+            document.querySelectorAll('.dir-btn').forEach((b) => {
+              b.classList.remove('bg-[#3F8FFE]', 'text-white', 'font-medium');
+              b.classList.add('text-slate-400');
+            });
+            btn.classList.add('bg-[#3F8FFE]', 'text-white', 'font-medium');
+            btn.classList.remove('text-slate-400');
+          });
+        });
+
+        // محاسبه زاویه هدف بر اساس جهت انتخابی
+        function computeTargetAngle(currentDeg, desiredNormDeg) {
+          const curNorm = normalizeDeg(currentDeg);
+          let diff = desiredNormDeg - curNorm;
+
+          if (state.motionDirection === 'shortest') {
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+          } else {
+            // حرکت پادساعتگرد روی دایره البروج
+            if (diff < 0) diff += 360;
+          }
+          return currentDeg + diff;
+        }
+
+        // اجرای موشن محور و خورشید با دیوریشن (پیش‌فرض ۴ ثانیه)
+        function runMotion() {
+          const pSign = Number(planetSignSel.value);
+          const pInSign = clamp(parseFloat(planetDegInput.value) || 0, 0, 29.99);
+          const desiredPlanet = normalizeDeg(pSign * 30 + pInSign);
+
+          const sSign = Number(sunSignSel.value);
+          const sInSign = clamp(parseFloat(sunDegInput.value) || 0, 0, 29.99);
+          const desiredSun = normalizeDeg(sSign * 30 + sInSign);
+
+          const duration = clamp(parseFloat(motionDurInput.value) || DEFAULT_MOTION_DURATION, 0.2, 30);
+
+          const isAxisMode = state.planetMoveMode === 'axis';
+          const targetAxis = isAxisMode
+            ? computeTargetAngle(state.axisDeg, desiredPlanet)
+            : state.axisDeg;
+          const isSyncedWithAxis = Math.abs(normalizeDeg(state.planetDeg - state.axisDeg)) < 0.01;
+
+          state.motionAnim.active = true;
+          state.motionAnim.startTime = performance.now();
+          state.motionAnim.duration = duration;
+          state.motionAnim.startAxis = state.axisDeg;
+          state.motionAnim.targetAxis = targetAxis;
+          state.motionAnim.startPlanet = isAxisMode && isSyncedWithAxis ? state.axisDeg : state.planetDeg;
+          state.motionAnim.targetPlanet = isAxisMode && isSyncedWithAxis
+            ? targetAxis
+            : computeTargetAngle(state.planetDeg, desiredPlanet);
+          state.motionAnim.startSun = state.sunDeg;
+          state.motionAnim.targetSun = computeTargetAngle(state.sunDeg, desiredSun);
+
+          showToast(`موشن با دیوریشن ${duration} ثانیه اجرا شد`);
+        }
+
+        document.getElementById('btn-run-motion').addEventListener('click', runMotion);
+
+        // کلید Enter در فیلدهای درجه نیز موشن را اجرا کند
+        [planetDegInput, sunDegInput, motionDurInput].forEach((el) => {
+          el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') runMotion();
+          });
+        });
+
+        // -----------------------------------------------------------------------
+        // کنترل دوربین سه‌بعدی و نشانگر کره‌ای تعاملی (3D Trackball Gizmo)
+        // -----------------------------------------------------------------------
+        function updateGizmoKnobVisual(yaw, pitch) {
+          // نگاشت Yaw (-180..180) و Pitch (-72..72) به موقعیت نقطه‌نشانگر داخل کره
+          const maxR = 52; // پیکسل از مرکز کره
+          const nx = clamp(yaw / 135, -1, 1);
+          const ny = clamp(-pitch / 72, -1, 1);
+          const len = Math.hypot(nx, ny);
+          const scale = len > 1 ? 1 / len : 1;
+
+          gizmoKnob.style.left = `${50 + (nx * scale * maxR / 136) * 100}%`;
+          gizmoKnob.style.top = `${50 + (ny * scale * maxR / 136) * 100}%`;
+
+          yawValEl.textContent = `${Math.round(yaw)}°`;
+          pitchValEl.textContent = `${Math.round(pitch)}°`;
+          zoomValEl.textContent = `${Number(zoomSlider.value).toFixed(2)}x`;
+        }
+
+        // درگ کردن نشانگر کره‌ای سه‌بعدی با ماوس و لمس
+        let isDraggingGizmo = false;
+        let lastPointerX = 0;
+        let lastPointerY = 0;
+
+        function onGizmoDown(e) {
+          isDraggingGizmo = true;
+          state.camAnim.active = false; // کنترل مستقیم و آنی هنگام چرخاندن نشانگر
+          const pt = e.touches ? e.touches[0] : e;
+          lastPointerX = pt.clientX;
+          lastPointerY = pt.clientY;
+        }
+
+        function onGizmoMove(e) {
+          if (!isDraggingGizmo) return;
+          e.preventDefault();
+          const pt = e.touches ? e.touches[0] : e;
+          const dx = pt.clientX - lastPointerX;
+          const dy = pt.clientY - lastPointerY;
+          lastPointerX = pt.clientX;
+          lastPointerY = pt.clientY;
+
+          let newYaw = state.camera.yaw + dx * 1.35;
+          if (newYaw > 180) newYaw -= 360;
+          if (newYaw < -180) newYaw += 360;
+
+          const newPitch = clamp(state.camera.pitch - dy * 0.95, -72, 72);
+
+          state.camera.yaw = newYaw;
+          state.camera.pitch = newPitch;
+
+          yawSlider.value = Math.round(newYaw);
+          pitchSlider.value = Math.round(newPitch);
+          updateGizmoKnobVisual(newYaw, newPitch);
+        }
+
+        function onGizmoUp() {
+          isDraggingGizmo = false;
+        }
+
+        gizmo.addEventListener('mousedown', onGizmoDown);
+        window.addEventListener('mousemove', onGizmoMove);
+        window.addEventListener('mouseup', onGizmoUp);
+
+        gizmo.addEventListener('touchstart', onGizmoDown, { passive: false });
+        window.addEventListener('touchmove', onGizmoMove, { passive: false });
+        window.addEventListener('touchend', onGizmoUp);
+
+        // تغییر اسلایدرهای دوربین (پیش‌نمایش آنی هنگام کشیدن اسلایدر)
+        yawSlider.addEventListener('input', () => {
+          state.camAnim.active = false;
+          state.camera.yaw = parseFloat(yawSlider.value);
+          updateGizmoKnobVisual(state.camera.yaw, state.camera.pitch);
+        });
+        pitchSlider.addEventListener('input', () => {
+          state.camAnim.active = false;
+          state.camera.pitch = parseFloat(pitchSlider.value);
+          updateGizmoKnobVisual(state.camera.yaw, state.camera.pitch);
+        });
+        zoomSlider.addEventListener('input', () => {
+          state.camAnim.active = false;
+          state.camera.zoom = parseFloat(zoomSlider.value);
+          updateGizmoKnobVisual(state.camera.yaw, state.camera.pitch);
+        });
+
+        // دکمه اعمال زاویه دوربین با دیوریشن
+        document.getElementById('btn-apply-camera').addEventListener('click', () => {
+          const dur = clamp(parseFloat(camDurInput.value) || DEFAULT_CAMERA_DURATION, 0.2, 30);
+          const targetYaw = parseFloat(yawSlider.value);
+          const targetPitch = parseFloat(pitchSlider.value);
+          const targetZoom = parseFloat(zoomSlider.value);
+          const desired = computeDesiredCameraState(targetYaw, targetPitch, targetZoom);
+          const sameParams =
+            Math.abs(state.camera.yaw - targetYaw) < 0.5 &&
+            Math.abs(state.camera.pitch - targetPitch) < 0.5 &&
+            Math.abs(state.camera.zoom - targetZoom) < 0.02;
+          const alreadyAtTarget = sameParams || camera.position.distanceTo(desired.pos) < 3.0;
+
+          triggerCameraAnimation(
+            targetYaw,
+            targetPitch,
+            targetZoom,
+            dur,
+            alreadyAtTarget,
+            state.cameraMode === 'free'
+          );
+          showToast(`حرکت نرم دوربین با دیوریشن ${dur} ثانیه اجرا شد`);
+        });
+
+        // انتخاب حالت دوربین سه‌بعدی (آزاد / روبروی سیاره / همراه با محور عمودی)
+        document.querySelectorAll('.cam-mode-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const prevMode = state.cameraMode;
+            const mode = btn.dataset.camMode;
+            state.cameraMode = mode;
+
+            document.querySelectorAll('.cam-mode-btn').forEach((b) => {
+              b.classList.remove('bg-[#3F8FFE]', 'text-white');
+              b.classList.add('text-slate-400');
+            });
+            btn.classList.add('bg-[#3F8FFE]', 'text-white');
+            btn.classList.remove('text-slate-400');
+
+            const dur = clamp(parseFloat(camDurInput.value) || DEFAULT_CAMERA_DURATION, 0.2, 30);
+            triggerCameraAnimation(
+              parseFloat(yawSlider.value),
+              parseFloat(pitchSlider.value),
+              parseFloat(zoomSlider.value),
+              dur,
+              false,
+              prevMode === 'free' && mode === 'free'
+            );
+
+            const modeLabels = {
+              free: 'حالت دوربین آزاد سه‌بعدی فعال شد',
+              planet: 'دوربین سه‌بعدی روبروی سیاره قرار گرفت',
+              axis: 'دوربین همراه با محور عمودی فعال شد'
+            };
+            showToast(modeLabels[mode]);
+          });
+        });
+
+        // ریست دوربین به نمای روبرو (۰ درجه، زوم ۱)
+        document.getElementById('btn-reset-camera').addEventListener('click', () => {
+          const prevMode = state.cameraMode;
+          state.cameraMode = 'free';
+          document.querySelectorAll('.cam-mode-btn').forEach((b) => {
+            const isFree = b.dataset.camMode === 'free';
+            b.classList.toggle('bg-[#3F8FFE]', isFree);
+            b.classList.toggle('text-white', isFree);
+            b.classList.toggle('text-slate-400', !isFree);
+          });
+
+          yawSlider.value = 0;
+          pitchSlider.value = 0;
+          zoomSlider.value = 1;
+          updateGizmoKnobVisual(0, 0);
+
+          const dur = clamp(parseFloat(camDurInput.value) || DEFAULT_CAMERA_DURATION, 0.2, 30);
+          triggerCameraAnimation(0, 0, 1, dur, false, prevMode === 'free');
+          showToast('دوربین به نمای روبرو بازگشت');
+        });
+
+        // -----------------------------------------------------------------------
+        // تغییر تصاویر خورشید و سیاره با URL و تغییر پس‌زمینه فرم 9:16
+        // -----------------------------------------------------------------------
+        const planetUrlInput = document.getElementById('planet-url');
+        const sunUrlInput = document.getElementById('sun-url');
+        const bgUrlInput = document.getElementById('bg-url');
+        const bgColorPicker = document.getElementById('bg-color-picker');
+        const toggleStars = document.getElementById('toggle-stars');
+
+        document.getElementById('btn-set-planet-url').addEventListener('click', () => {
+          const url = planetUrlInput.value.trim();
+          if (!url) {
+            planetSprite.material.map = defaultPlanetTexture;
+            planetSprite.material.needsUpdate = true;
+            showToast('تصویر پیش‌فرض سیاره بازیابی شد');
+            return;
+          }
+          loadCircularImageTexture(
+            url,
+            (tex) => {
+              planetSprite.material.map = tex;
+              planetSprite.material.needsUpdate = true;
+              showToast('تصویر جدید سیاره روی محور اعمال شد');
+            },
+            () => {
+              showToast('خطا در بارگذاری تصویر (بررسی کنید لینک معتبر و دارای مجوز CORS باشد)');
+            }
+          );
+        });
+
+        document.getElementById('btn-clear-planet-url').addEventListener('click', () => {
+          planetUrlInput.value = '';
+          planetSprite.material.map = defaultPlanetTexture;
+          planetSprite.material.needsUpdate = true;
+          showToast('تصویر سیاره به حالت پیش‌فرض برگشت');
+        });
+
+        document.getElementById('btn-set-sun-url').addEventListener('click', () => {
+          const url = sunUrlInput.value.trim();
+          if (!url) {
+            sunSprite.material.map = defaultSunTexture;
+            sunSprite.material.needsUpdate = true;
+            showToast('تصویر پیش‌فرض خورشید بازیابی شد');
+            return;
+          }
+          loadCircularImageTexture(
+            url,
+            (tex) => {
+              sunSprite.material.map = tex;
+              sunSprite.material.needsUpdate = true;
+              showToast('تصویر جدید خورشید اعمال شد');
+            },
+            () => {
+              showToast('خطا در بارگذاری تصویر خورشید (بررسی کنید لینک معتبر و دارای مجوز CORS باشد)');
+            }
+          );
+        });
+
+        document.getElementById('btn-clear-sun-url').addEventListener('click', () => {
+          sunUrlInput.value = '';
+          sunSprite.material.map = defaultSunTexture;
+          sunSprite.material.needsUpdate = true;
+          showToast('تصویر خورشید به حالت پیش‌فرض برگشت');
+        });
+
+        // تغییر رنگ پس‌زمینه
+        bgColorPicker.addEventListener('input', () => {
+          stageEl.style.backgroundColor = bgColorPicker.value;
+        });
+
+        // فعال/غیرفعال کردن ستارگان سه‌بعدی
+        toggleStars.addEventListener('change', () => {
+          state.starsVisible = toggleStars.checked;
+        });
+
+        // تنظیم میزان ستارگان رئالیستیک پس‌زمینه
+        const starCountInput = document.getElementById('star-count-input');
+        const starCountSlider = document.getElementById('star-count-slider');
+        function applyStarCount(val, syncInput = true) {
+          const parsed = parseInt(val, 10);
+          const count = Math.round(clamp(Number.isNaN(parsed) ? 0 : parsed, 0, MAX_STAR_COUNT));
+          state.starCount = count;
+          if (syncInput) starCountInput.value = count;
+          starCountSlider.value = count;
+          if (starPoints && starPoints.geometry) {
+            starPoints.geometry.setDrawRange(0, count);
+          }
+        }
+        starCountInput.addEventListener('input', () => applyStarCount(starCountInput.value, false));
+        starCountInput.addEventListener('change', () => applyStarCount(starCountInput.value, true));
+        starCountSlider.addEventListener('input', () => applyStarCount(starCountSlider.value, true));
+
+        // -----------------------------------------------------------------------
+        // تغییر اندازه نشان‌ها، رنگ دایره و محورها، و رنگ ۴ عنصر با Hex
+        // -----------------------------------------------------------------------
+        const symbolSizeInput = document.getElementById('symbol-size-input');
+        const symbolSizeSlider = document.getElementById('symbol-size-slider');
+        function applySymbolSize(pxVal, syncInput = true) {
+          const parsed = parseFloat(pxVal);
+          if (Number.isNaN(parsed)) return;
+          const size = clamp(parsed, 4, 16);
+          state.symbolSizePx = size;
+          if (syncInput) symbolSizeInput.value = size;
+          symbolSizeSlider.value = size;
+          const scaleFactor = size / SYMBOL_SIZE_PX;
+          sectorObjects.forEach((obj) => {
+            obj.coloredMesh.scale.set(scaleFactor, scaleFactor, 1);
+            obj.navyMesh.scale.set(scaleFactor, scaleFactor, 1);
+          });
+        }
+        symbolSizeInput.addEventListener('input', () => applySymbolSize(symbolSizeInput.value, false));
+        symbolSizeInput.addEventListener('change', () => applySymbolSize(symbolSizeInput.value, true));
+        symbolSizeSlider.addEventListener('input', () => applySymbolSize(symbolSizeSlider.value, true));
+
+        // تغییر رنگ خطوط دایره
+        const circleColorPicker = document.getElementById('circle-color-picker');
+        const circleColorHex = document.getElementById('circle-color-hex');
+        function applyCircleColor(hexVal) {
+          const hex = normalizeHexColor(hexVal);
+          if (!hex) return;
+          circleColorPicker.value = hex;
+          if (document.activeElement !== circleColorHex) circleColorHex.value = hex;
+          circleLineMaterials.forEach((mat) => {
+            mat.color.set(hex);
+          });
+        }
+        circleColorPicker.addEventListener('input', () => applyCircleColor(circleColorPicker.value));
+        circleColorHex.addEventListener('input', () => applyCircleColor(circleColorHex.value));
+        circleColorHex.addEventListener('blur', () => {
+          circleColorHex.value = circleColorPicker.value.toUpperCase();
+        });
+
+        // تغییر رنگ محور نقطه‌چین
+        const axisColorPicker = document.getElementById('axis-color-picker');
+        const axisColorHex = document.getElementById('axis-color-hex');
+        function applyAxisColor(hexVal) {
+          const hex = normalizeHexColor(hexVal);
+          if (!hex) return;
+          axisColorPicker.value = hex;
+          if (document.activeElement !== axisColorHex) axisColorHex.value = hex;
+          if (axisDotMat) {
+            axisDotMat.color.set(hex);
+          }
+          if (axisSparkMat) {
+            axisSparkMat.color.set(hex);
+          }
+        }
+        axisColorPicker.addEventListener('input', () => applyAxisColor(axisColorPicker.value));
+        axisColorHex.addEventListener('input', () => applyAxisColor(axisColorHex.value));
+        axisColorHex.addEventListener('blur', () => {
+          axisColorHex.value = axisColorPicker.value.toUpperCase();
+        });
+
+        // تغییر رنگ عناصر چهارگانه (آتش، باد، خاک، آب) برای حالت اکتیو و نان‌اکتیو
+        function applyElementColor(elementKey, kind, hexVal) {
+          const hex = normalizeHexColor(hexVal);
+          if (!hex) return;
+
+          const picker = document.querySelector(`.el-color-picker[data-el="${elementKey}"][data-kind="${kind}"]`);
+          const textInput = document.querySelector(`.el-color-hex[data-el="${elementKey}"][data-kind="${kind}"]`);
+          if (picker) picker.value = hex;
+          if (textInput && document.activeElement !== textInput) textInput.value = hex;
+
+          sectorObjects.forEach((obj) => {
+            if (obj.sign.element !== elementKey) return;
+            if (kind === 'active') {
+              obj.sign.color = hex;
+              obj.activeColor.set(hex);
+
+              const oldSymTex = obj.coloredMat.map;
+              obj.coloredMat.map = createSvgSymbolTexture(obj.sign.svgContent, hex);
+              obj.coloredMat.needsUpdate = true;
+              if (oldSymTex) oldSymTex.dispose();
+
+              const oldGlowTex = obj.glowMat.map;
+              obj.glowMat.map = createSectorGlowTexture(hex);
+              obj.glowMat.needsUpdate = true;
+              if (oldGlowTex) oldGlowTex.dispose();
+            } else {
+              obj.sign.inactiveBg = hex;
+              obj.inactiveColor.set(hex);
+            }
+          });
+          updateSectorVisuals(1);
+        }
+
+        document.querySelectorAll('.el-color-picker').forEach((picker) => {
+          picker.addEventListener('input', () => {
+            applyElementColor(picker.dataset.el, picker.dataset.kind, picker.value);
+          });
+        });
+
+        document.querySelectorAll('.el-color-hex').forEach((input) => {
+          input.addEventListener('input', () => {
+            applyElementColor(input.dataset.el, input.dataset.kind, input.value);
+          });
+          input.addEventListener('blur', () => {
+            const picker = document.querySelector(`.el-color-picker[data-el="${input.dataset.el}"][data-kind="${input.dataset.kind}"]`);
+            if (picker) input.value = picker.value.toUpperCase();
+          });
+        });
+
+        // تغییر تصویر پس‌زمینه فرم 9:16 با URL
+        document.getElementById('btn-set-bg-url').addEventListener('click', () => {
+          const url = bgUrlInput.value.trim();
+          if (!url) {
+            stageEl.style.backgroundImage = 'none';
+            showToast('تصویر پس‌زمینه حذف شد');
+            return;
+          }
+          stageEl.style.backgroundImage = `url("${url.replace(/"/g, '%22')}")`;
+          showToast('تصویر پس‌زمینه فرم ۹:۱۶ اعمال شد');
+        });
+
+        document.getElementById('btn-clear-bg-url').addEventListener('click', () => {
+          bgUrlInput.value = '';
+          stageEl.style.backgroundImage = 'none';
+          stageEl.style.backgroundColor = '#060911';
+          bgColorPicker.value = '#060911';
+          showToast('پس‌زمینه به حالت پیش‌فرض برگشت');
+        });
+
+        // بازگشت کامل به حالت پیش‌فرض عکس مرجع
+        document.getElementById('btn-reset-all').addEventListener('click', () => {
+          state.planetMoveMode = 'axis';
+          document.querySelectorAll('.move-mode-btn').forEach((b) => {
+            const isAxis = b.dataset.moveMode === 'axis';
+            b.classList.toggle('bg-[#3F8FFE]', isAxis);
+            b.classList.toggle('text-white', isAxis);
+            b.classList.toggle('font-medium', isAxis);
+            b.classList.toggle('text-slate-400', !isAxis);
+          });
+
+          planetSignSel.value = '1';
+          planetDegInput.value = '26';
+          planetDegSlider.value = '26';
+          sunSignSel.value = '2';
+          sunDegInput.value = '9';
+          sunDegSlider.value = '9';
+          motionDurInput.value = DEFAULT_MOTION_DURATION;
+          camDurInput.value = DEFAULT_CAMERA_DURATION;
+          updateDegreeBadges();
+
+          runMotion();
+
+          // ریست دوربین
+          document.getElementById('btn-reset-camera').click();
+        });
+
+        updateGizmoKnobVisual(0, 0);
+      }
+
+      // =========================================================================
+      // [شروع برنامه پس از بارگذاری کامل صفحه / WINDOW ONLOAD]
+      // =========================================================================
+      window.onload = function () {
+        try {
+          initThreeScene();
+          initUI();
+          requestAnimationFrame(animate);
+        } catch (error) {
+          console.error('Initialization Error:', error);
+          showToast('خطا در راه‌اندازی صحنه سه‌بعدی');
+        }
+      };
+    })();
+  </script>
+</body>
+</html>
